@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bubbles School - Interactive Vocabulary Match</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{'bubble-pink':'#ff70a6','bubble-blue':'#4ea8de','bubble-yellow':'#ffd670','bubble-orange':'#ff9770','bubble-purple':'#7678ed','bubble-cream':'#fff9f0'},fontFamily:{fredoka:['Fredoka','sans-serif'],quicksand:['Quicksand','sans-serif']}}}};
+</script>
+<style>
+body{font-family:'Quicksand',sans-serif;background:linear-gradient(135deg,#eaf8ff 0%,#fff9f0 100%);min-height:100vh;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.bubble{position:absolute;border-radius:50%;background:rgba(255,255,255,.4);border:2px solid rgba(255,255,255,.8);box-shadow:inset 0 0 10px rgba(255,255,255,.5);animation:floatBubble 12s infinite linear;pointer-events:none;z-index:0}
+@keyframes floatBubble{0%{transform:translateY(105vh) scale(.8);opacity:0}10%,90%{opacity:.8}100%{transform:translateY(-10vh) scale(1.2);opacity:0}}
+.card-draggable{touch-action:none;cursor:grab;transition:transform .2s ease,box-shadow .2s ease,background-color .2s ease,border-color .2s ease}
+.card-draggable:active{cursor:grabbing;transform:scale(1.04)}
+.card-draggable.selected{box-shadow:0 0 0 4px #7678ed;background-color:#f3f0ff!important;border-color:#7678ed!important;transform:translateY(-3px)}
+.drop-zone{transition:all .25s ease;cursor:pointer}
+.drop-zone.drag-over{border-color:#4ea8de;background-color:#e0f2fe;transform:scale(1.02);box-shadow:0 0 0 3px rgba(78,168,222,.15)}
+.drop-zone.matched{border-color:#10b981;background-color:#ecfdf5;cursor:default}
+@keyframes correctBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}} .correct-anim{animation:correctBounce .4s ease-in-out}
+@keyframes wrongShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}} .shake-anim{animation:wrongShake .4s ease-in-out}
+@media(max-width:640px){.card-draggable,.drop-zone{min-height:58px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body class="relative overflow-x-hidden min-h-screen flex flex-col justify-between text-gray-800">
+<div id="bubbles-container" aria-hidden="true">
+<div class="bubble" style="width:60px;height:60px;left:10%;animation-delay:0s"></div>
+<div class="bubble" style="width:90px;height:90px;left:25%;animation-delay:2s"></div>
+<div class="bubble" style="width:40px;height:40px;left:50%;animation-delay:5s"></div>
+<div class="bubble" style="width:75px;height:75px;left:70%;animation-delay:1s"></div>
+<div class="bubble" style="width:110px;height:110px;left:85%;animation-delay:3s"></div>
+</div>
+
+<header class="relative z-10 bg-white/90 backdrop-blur-md border-b-4 border-bubble-yellow px-4 py-3 shadow-md">
+<div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full bg-bubble-cream border-2 border-bubble-yellow p-1 flex items-center justify-center shadow-inner">
+<img src="1000060044.png" alt="Bubbles School Logo" class="max-h-full max-w-full object-contain" onerror="this.onerror=null;this.src='https://placehold.co/100x100/ffd670/ffffff?text=Bubbles'">
+</div>
+<div><h1 class="font-fredoka text-xl md:text-2xl text-bubble-purple leading-tight">BUBBLES SCHOOL</h1><p class="text-xs md:text-sm text-pink-500 font-bold">Vocabulary Complementary 1 • Interactive Match</p></div>
+</div>
+<div class="flex items-center gap-3 bg-bubble-cream px-4 py-1.5 rounded-full border-2 border-bubble-orange/40 shadow-sm">
+<div class="flex items-center gap-1.5 text-yellow-500 font-fredoka text-lg"><i class="fa-solid fa-star"></i><span id="score-text">0 / 25</span></div>
+<div class="h-5 w-0.5 bg-gray-300"></div>
+<button id="sound-btn" type="button" onclick="toggleSound()" class="text-gray-600 hover:text-bubble-purple transition-colors p-1" title="Toggle Sound" aria-label="Toggle sound" aria-pressed="true"><i class="fa-solid fa-volume-high text-lg" id="sound-icon"></i></button>
+<button type="button" onclick="resetGame()" class="text-gray-600 hover:text-red-500 transition-colors p-1" title="Restart Game" aria-label="Restart game"><i class="fa-solid fa-rotate-right text-lg"></i></button>
+</div>
+</div>
+</header>
+
+<main class="relative z-10 max-w-5xl mx-auto w-full px-4 py-6 flex-grow flex flex-col justify-center">
+<div class="flex flex-wrap justify-center gap-2 mb-6" id="level-tabs" role="tablist" aria-label="Vocabulary levels"></div>
+<div class="bg-blue-50/90 border-l-4 border-bubble-blue p-3 rounded-r-xl mb-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs md:text-sm text-blue-900">
+<div class="flex items-start gap-2"><i class="fa-solid fa-hand-pointer text-bubble-blue text-lg mt-0.5"></i><span><strong>How to Play:</strong> Drag an English word to its Spanish target <u>OR</u> tap a word and then tap its matching pair!</span></div>
+<span id="level-progress-tag" class="font-fredoka bg-bubble-blue text-white px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap">Level 1 of 5</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start" id="matching-playground">
+<div class="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border-2 border-bubble-blue/30 shadow-lg">
+<h2 class="font-fredoka text-center text-lg text-bubble-blue mb-4 flex items-center justify-center gap-2"><i class="fa-solid fa-font"></i> Column A: English Words</h2>
+<div id="english-cards-container" class="space-y-3"></div>
+</div>
+<div class="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border-2 border-bubble-orange/30 shadow-lg">
+<h2 class="font-fredoka text-center text-lg text-bubble-orange mb-4 flex items-center justify-center gap-2"><i class="fa-solid fa-language"></i> Column B: Spanish Meanings</h2>
+<div id="spanish-targets-container" class="space-y-3"></div>
+</div>
+</div>
+<div class="mt-6 text-center flex justify-between items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-2xl border border-gray-200">
+<button id="prev-level-btn" type="button" onclick="changeLevel(-1)" class="px-3 md:px-4 py-2 rounded-xl bg-gray-200 text-gray-700 font-fredoka hover:bg-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"><i class="fa-solid fa-arrow-left"></i><span class="hidden sm:inline">Previous</span></button>
+<span id="level-status-text" class="font-fredoka text-bubble-purple text-xs md:text-base" aria-live="polite">Level Matched: 0 / 5</span>
+<button id="next-level-btn" type="button" onclick="changeLevel(1)" class="px-3 md:px-4 py-2 rounded-xl bg-bubble-purple text-white font-fredoka hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"><span class="hidden sm:inline">Next</span><i class="fa-solid fa-arrow-right"></i></button>
+</div>
+</main>
+
+<div id="victory-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+<div id="modal-content" class="bg-white rounded-3xl border-4 border-bubble-yellow max-w-md w-full p-6 text-center shadow-2xl transform transition-all scale-95 opacity-0 duration-300">
+<div class="w-20 h-20 bg-bubble-yellow/30 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-3 text-4xl border-2 border-bubble-yellow"><i class="fa-solid fa-trophy"></i></div>
+<h2 id="victory-title" class="font-fredoka text-3xl text-bubble-purple mb-1">Great Job! 🎉</h2>
+<p class="text-gray-600 font-semibold mb-4" id="modal-message">You completed all vocabulary levels!</p>
+<div class="bg-bubble-cream border-2 border-bubble-orange/30 rounded-2xl p-4 mb-6 space-y-2">
+<div class="flex justify-between font-fredoka text-gray-700"><span>Total Matches:</span><span class="text-bubble-purple font-bold" id="final-score">25 / 25</span></div>
+<div class="flex justify-between font-fredoka text-gray-700"><span>Accuracy:</span><span class="text-emerald-600 font-bold" id="final-accuracy">100%</span></div>
+<div class="flex justify-between font-fredoka text-gray-700"><span>Attempts:</span><span class="text-bubble-orange font-bold" id="final-attempts">25</span></div>
+</div>
+<button type="button" onclick="resetGame()" class="w-full py-3 bg-bubble-pink hover:bg-pink-600 text-white rounded-xl font-fredoka font-semibold shadow-lg transition-transform active:scale-95"><i class="fa-solid fa-rotate-right mr-1"></i> Play Again</button>
+</div>
+</div>
+
+<footer class="relative z-10 text-center py-3 text-xs text-gray-500 bg-white/50 border-t border-gray-200">Bubbles School &copy; 2026 • Primary English Action Words Practice</footer>
+
+<script>
+const VOCABULARY=[
+{id:1,english:"Match",spanish:"Emparejar",level:1},{id:2,english:"Circle",spanish:"Encerrar",level:1},{id:3,english:"Draw",spanish:"Dibujar",level:1},{id:4,english:"Color",spanish:"Colorear",level:1},{id:5,english:"Write",spanish:"Escribir",level:1},
+{id:6,english:"Ask",spanish:"Preguntar",level:2},{id:7,english:"Answer",spanish:"Responder",level:2},{id:8,english:"Repeat",spanish:"Repetir",level:2},{id:9,english:"Speak",spanish:"Hablar",level:2},{id:10,english:"Look",spanish:"Mirar",level:2},
+{id:11,english:"Listen",spanish:"Escuchar",level:3},{id:12,english:"Read",spanish:"Leer",level:3},{id:13,english:"Find",spanish:"Encontrar",level:3},{id:14,english:"Work in groups",spanish:"Trabajar en grupos",level:3},{id:15,english:"Work in pairs",spanish:"Trabajar en parejas",level:3},
+{id:16,english:"Sit down",spanish:"Sentarse",level:4},{id:17,english:"Stand up",spanish:"Ponerse de pie",level:4},{id:18,english:"Close your book",spanish:"Cerrar tu libro",level:4},{id:19,english:"Open your book",spanish:"Abrir tu libro",level:4},{id:20,english:"Paste",spanish:"Pegar",level:4},
+{id:21,english:"Cut",spanish:"Cortar",level:5},{id:22,english:"Point to",spanish:"Señalar",level:5},{id:23,english:"Underline",spanish:"Subrayar",level:5},{id:24,english:"Choose",spanish:"Elegir",level:5},{id:25,english:"Complete",spanish:"Completar",level:5}
+];
+
+let currentLevel=1,totalLevels=5,totalVocabulary=VOCABULARY.length;
+let matchedPairs=new Set(),selectedEnglishCard=null,attemptsCount=0,correctMatches=0,interactionLocked=false,isSoundEnabled=true,victoryShown=false;
+const AudioCtx=window.AudioContext||window.webkitAudioContext;
+let audioCtx=null;
+
+function playSound(type){
+if(!isSoundEnabled||!AudioCtx)return;
+try{
+if(!audioCtx)audioCtx=new AudioCtx();
+if(audioCtx.state==='suspended')audioCtx.resume();
+const now=audioCtx.currentTime;
+if(type==='victory'){
+[523.25,659.25,783.99,1046.5].forEach((freq,index)=>{
+const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=now+index*.1;
+o.type='triangle';o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.4);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+.4);
+});return;
+}
+const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);
+if(type==='correct'){o.type='triangle';o.frequency.setValueAtTime(523.25,now);o.frequency.exponentialRampToValueAtTime(783.99,now+.15);g.gain.setValueAtTime(.3,now);g.gain.exponentialRampToValueAtTime(.01,now+.25);o.start(now);o.stop(now+.25)}
+else if(type==='wrong'){o.type='sawtooth';o.frequency.setValueAtTime(180,now);o.frequency.linearRampToValueAtTime(110,now+.2);g.gain.setValueAtTime(.2,now);g.gain.exponentialRampToValueAtTime(.01,now+.2);o.start(now);o.stop(now+.2)}
+else if(type==='click'){o.type='sine';o.frequency.setValueAtTime(400,now);o.frequency.exponentialRampToValueAtTime(200,now+.05);g.gain.setValueAtTime(.12,now);g.gain.exponentialRampToValueAtTime(.01,now+.05);o.start(now);o.stop(now+.05)}
+}catch(e){console.log("Audio unavailable:",e)}
+}
+
+function toggleSound(){
+isSoundEnabled=!isSoundEnabled;
+const icon=document.getElementById('sound-icon'),button=document.getElementById('sound-btn');
+icon.className=isSoundEnabled?'fa-solid fa-volume-high text-lg':'fa-solid fa-volume-xmark text-lg text-red-400';
+button.setAttribute('aria-pressed',String(isSoundEnabled));
+}
+function shuffleArray(array){
+const shuffled=[...array];
+for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]]}
+return shuffled;
+}
+function initTabs(){
+const c=document.getElementById('level-tabs');c.innerHTML='';
+for(let i=1;i<=totalLevels;i++){
+const b=document.createElement('button'),active=currentLevel===i;
+b.type='button';b.setAttribute('role','tab');b.setAttribute('aria-selected',String(active));
+b.className=`px-3.5 py-1.5 rounded-full font-fredoka text-xs md:text-sm transition-all border-2 ${active?'bg-bubble-purple text-white border-bubble-purple shadow-md scale-105':'bg-white text-gray-600 border-gray-200 hover:border-bubble-purple'}`;
+b.innerHTML=`Level ${i}`;
+b.addEventListener('click',()=>{if(interactionLocked)return;playSound('click');currentLevel=i;renderLevel()});
+c.appendChild(b);
+}
+}
+function renderLevel(){
+initTabs();selectedEnglishCard=null;interactionLocked=false;
+const levelItems=VOCABULARY.filter(x=>x.level===currentLevel),ec=document.getElementById('english-cards-container'),sc=document.getElementById('spanish-targets-container');
+ec.innerHTML='';sc.innerHTML='';
+document.getElementById('level-progress-tag').innerText=`Level ${currentLevel} of ${totalLevels}`;
+levelItems.forEach(item=>{
+const matched=matchedPairs.has(item.id),card=document.createElement('div');
+card.id=`english-${item.id}`;card.draggable=!matched;
+card.className=`card-draggable p-3 md:p-4 rounded-xl border-2 flex items-center justify-between font-fredoka text-sm md:text-base ${matched?'bg-emerald-50 border-emerald-400 text-emerald-800 opacity-60 cursor-not-allowed':'bg-white border-bubble-blue/40 text-gray-800 hover:border-bubble-blue shadow-sm'}`;
+card.setAttribute('role','button');card.setAttribute('tabindex',matched?'-1':'0');
+card.innerHTML=`<div class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-bubble-blue/20 text-bubble-blue font-bold flex items-center justify-center text-xs">${item.id}</span><span>${item.english}</span></div>${matched?'<i class="fa-solid fa-circle-check text-emerald-500"></i>':'<i class="fa-solid fa-grip-vertical text-gray-300"></i>'}`;
+if(!matched){
+card.addEventListener('dragstart',e=>handleDragStart(e,item));
+card.addEventListener('click',()=>handleEnglishCardClick(item,card));
+card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();handleEnglishCardClick(item,card)}});
+}
+ec.appendChild(card);
+});
+shuffleArray(levelItems).forEach(item=>{
+const matched=matchedPairs.has(item.id),target=document.createElement('div');
+target.id=`spanish-${item.id}`;
+target.className=`drop-zone p-3 md:p-4 rounded-xl border-2 border-dashed flex items-center justify-between font-fredoka text-sm md:text-base ${matched?'matched border-emerald-400 bg-emerald-50 text-emerald-800':'border-gray-300 bg-gray-50/50 hover:border-bubble-orange text-gray-700'}`;
+target.setAttribute('role','button');target.setAttribute('tabindex',matched?'-1':'0');
+target.innerHTML=`<div class="flex items-center gap-2"><i class="fa-solid fa-tag text-bubble-orange/60 text-xs"></i><span>${item.spanish}</span></div><div>${matched?'<span class="text-xs bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full font-bold"><i class="fa-solid fa-check"></i> Matched</span>':'<span class="text-xs text-gray-400">Drop / Tap</span>'}</div>`;
+if(!matched){
+target.addEventListener('dragover',handleDragOver);target.addEventListener('dragleave',handleDragLeave);target.addEventListener('drop',e=>handleDrop(e,item,target));target.addEventListener('click',()=>handleSpanishZoneClick(item,target));
+target.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();handleSpanishZoneClick(item,target)}});
+}
+sc.appendChild(target);
+});
+updateProgressUI();
+}
+function handleDragStart(e,item){
+if(interactionLocked){e.preventDefault();return}
+playSound('click');e.dataTransfer.setData('text/plain',JSON.stringify({id:item.id}));e.dataTransfer.effectAllowed='move';
+}
+function handleDragOver(e){e.preventDefault();if(interactionLocked)return;e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('drag-over')}
+function handleDragLeave(e){e.currentTarget.classList.remove('drag-over')}
+function handleDrop(e,targetItem,targetEl){
+e.preventDefault();targetEl.classList.remove('drag-over');if(interactionLocked)return;
+try{const data=JSON.parse(e.dataTransfer.getData('text/plain'));const item=VOCABULARY.find(x=>x.id===data.id);if(item)checkMatch(item,targetItem,targetEl)}catch(err){console.error('Invalid drag/drop data:',err)}
+}
+function handleEnglishCardClick(item,card){
+if(interactionLocked)return;playSound('click');
+if(selectedEnglishCard&&selectedEnglishCard.item.id===item.id){card.classList.remove('selected');selectedEnglishCard=null;return}
+document.querySelectorAll('.card-draggable.selected').forEach(x=>x.classList.remove('selected'));
+selectedEnglishCard={item,el:card};card.classList.add('selected');
+}
+function handleSpanishZoneClick(targetItem,targetEl){
+if(interactionLocked)return;if(!selectedEnglishCard){playSound('click');return}
+checkMatch(selectedEnglishCard.item,targetItem,targetEl);
+}
+function checkMatch(englishItem,spanishItem,targetEl){
+if(interactionLocked||matchedPairs.has(englishItem.id))return;
+interactionLocked=true;attemptsCount++;
+const englishEl=document.getElementById(`english-${englishItem.id}`);
+if(englishItem.id===spanishItem.id){
+correctMatches++;matchedPairs.add(englishItem.id);playSound('correct');targetEl.classList.add('correct-anim');if(englishEl)englishEl.classList.add('correct-anim');selectedEnglishCard=null;
+setTimeout(()=>{renderLevel();checkLevelCompletion()},350);
+}else{
+playSound('wrong');targetEl.classList.add('shake-anim');if(selectedEnglishCard?.el)selectedEnglishCard.el.classList.add('shake-anim');
+setTimeout(()=>{targetEl.classList.remove('shake-anim');if(selectedEnglishCard?.el)selectedEnglishCard.el.classList.remove('shake-anim','selected');selectedEnglishCard=null;interactionLocked=false},450);
+}
+}
+function updateProgressUI(){
+document.getElementById('score-text').innerText=`${matchedPairs.size} / ${totalVocabulary}`;
+const items=VOCABULARY.filter(x=>x.level===currentLevel),count=items.filter(x=>matchedPairs.has(x.id)).length;
+document.getElementById('level-status-text').innerText=`Level Matched: ${count} / ${items.length}`;
+document.getElementById('prev-level-btn').disabled=currentLevel===1;
+document.getElementById('next-level-btn').disabled=currentLevel===totalLevels;
+}
+function changeLevel(delta){
+if(interactionLocked)return;const next=currentLevel+delta;if(next<1||next>totalLevels)return;playSound('click');currentLevel=next;renderLevel();
+}
+function checkLevelCompletion(){
+const items=VOCABULARY.filter(x=>x.level===currentLevel);
+if(!items.every(x=>matchedPairs.has(x.id)))return;
+if(matchedPairs.size===totalVocabulary){triggerVictory();return}
+setTimeout(()=>{if(currentLevel<totalLevels&&matchedPairs.size<totalVocabulary){currentLevel++;renderLevel()}},800);
+}
+function triggerVictory(){
+if(victoryShown)return;victoryShown=true;interactionLocked=true;playSound('victory');
+if(typeof confetti==='function'){confetti({particleCount:120,spread:80,origin:{y:.6}});setTimeout(()=>{confetti({particleCount:80,spread:100,origin:{x:.2,y:.7}});confetti({particleCount:80,spread:100,origin:{x:.8,y:.7}})},250)}
+const accuracy=attemptsCount>0?Math.round(correctMatches/attemptsCount*100):0;
+document.getElementById('final-score').innerText=`${matchedPairs.size} / ${totalVocabulary}`;
+document.getElementById('final-accuracy').innerText=`${accuracy}%`;
+document.getElementById('final-attempts').innerText=attemptsCount;
+const modal=document.getElementById('victory-modal'),content=document.getElementById('modal-content');
+modal.classList.remove('hidden');
+setTimeout(()=>{content.classList.remove('scale-95','opacity-0');content.classList.add('scale-100','opacity-100')},50);
+}
+function resetGame(){
+const modal=document.getElementById('victory-modal'),content=document.getElementById('modal-content');
+content.classList.add('scale-95','opacity-0');setTimeout(()=>modal.classList.add('hidden'),200);
+matchedPairs.clear();currentLevel=1;attemptsCount=0;correctMatches=0;selectedEnglishCard=null;interactionLocked=false;victoryShown=false;playSound('click');renderLevel();
+}
+window.addEventListener('DOMContentLoaded',renderLevel);
+</script>
+</body>
+</html>
